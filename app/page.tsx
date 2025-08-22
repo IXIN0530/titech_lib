@@ -1,103 +1,161 @@
-import Image from "next/image";
+"use client"
+
+import BookState from "@/components/bookState";
+import { BookStateType, BookType } from "@/type";
+import axios from "axios";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  //初回マウント
+  const didMountRef = useRef(false);
+  //保存された図書ID
+  const [bookIds, setBookIds] = useState<string[]>([]);
+  //名前、Id,stateがセットになったもの
+  const [books, setBooks] = useState<BookType[]>([]);
+  //今データを取得しているかどうか
+  const [isLoading, setIsLoading] = useState(false);
+
+  //状態を取得するメソッド
+  const getState = async (bookId: string) => {
+    const resState = await axios.get("/api/getBookStatus?bookId=" + bookId);
+    if (resState.data["status"] === 404) {
+      return []
+    }
+    return resState.data["data"] as BookStateType[];
+  }
+  //図書名を取得するメソッド
+  const getTitle = async (bookId: string) => {
+    const resTitle = await axios.get("/api/getBookName?bookId=" + bookId);
+    if (resTitle.data["status"] === 404) {
+      return "NotFound";
+    }
+    return resTitle.data["data"] as string;
+  }
+  //bookIdを受け取り、それを削除したbooks,bookIdsを作成
+  const deleteById = (bookId: string) => {
+    const newBooks = books.filter(book => book.id !== bookId);
+    const newBookIds = bookIds.filter(id => id !== bookId);
+    setBooks(newBooks);
+    setBookIds(newBookIds);
+  }
+
+  //与えられたBookIdsに対して、図書名と状態を取得し、booksに格納する
+  const getAllBooksData = async (bookIds: string[]) => {
+    if (isLoading) return; // すでにデータを取得中の場合は何もしない
+    setIsLoading(true);
+    let count = bookIds.length;
+    const newBooks: BookType[] = [];
+
+    bookIds.forEach(async (bookId) => {
+      const bookTitle = await getTitle(bookId);
+      const bookState = await getState(bookId);
+      count--;
+      if (bookState.length === 0) return; // 状態が取得できない場合はスキップ
+      newBooks.push({ title: bookTitle, id: bookId, state: bookState });
+    });
+
+    while (count > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100)); // 少し待つ
+    }
+    setBooks(newBooks);
+    setIsLoading(false);
+  }
+
+  // const bookId = "BB16838611";
+  //idを入力し、本のデータを取得するメソッド
+  // const getBookData = async (bookId: string) => {
+  //   const bookState = getState(bookId);
+  //   const bookTitle = await getTitle(bookId);
+  //   console.log(bookState);
+  //   console.log(bookTitle);
+  // }
+
+  //追加ボタンのRef
+  const inputIdRef = useRef<HTMLInputElement>(null);
+
+  //追加ボタンを押した時の処理
+  const addBookID = async () => {
+    console.log(books);
+    if (!inputIdRef.current?.value) {
+      alert("図書IDを入力してください");
+      return;
+    }
+    const newBookId = inputIdRef.current.value as string;
+    //すでに追加されている場合は何もしない
+    if (bookIds.includes(newBookId)) {
+      alert("すでに追加されています");
+      return;
+    }
+    //図書IDが有効かを確認
+    const bookState = await getState(newBookId);
+    if (bookState.length === 0) {
+      alert("図書IDが無効です");
+      return;
+    }
+    //図書名を取得
+    const bookTitle = await getTitle(newBookId);
+    setBookIds([...bookIds, newBookId]);
+    setBooks([...books, { title: bookTitle, id: newBookId, state: bookState }]);
+    //ローカルストレージに保存
+    localStorage.setItem("bookIds", JSON.stringify([...bookIds, newBookId]));
+    console.log(bookState);
+  }
+
+  useEffect(() => {
+    if (!didMountRef.current) {
+      // localStorage.removeItem("bookIds");
+      didMountRef.current = true;
+      // 初回マウント時に実行する処理
+      const strage = localStorage.getItem("bookIds");
+      if (strage) {
+        const storedBookIds = JSON.parse(strage) as string[];
+        setBookIds(storedBookIds);
+
+        //有効なIDに対してStateを取得して格納
+        getAllBooksData(storedBookIds);
+      }
+    }
+  }, []);
+
+  // bookIdsが更新されたときにローカルストレージに保存
+  useEffect(() => {
+    localStorage.setItem("bookIds", JSON.stringify(bookIds));
+  }, [bookIds]);
+
+  return (
+    <div className="min-h-[100svh]  grid grid-rows-12 bg-stone-50">
+      <div className="row-span-1 my-auto">
+        <p className="text-center  text-xl font-bold">東京科学大学図書確認システム</p>
+      </div>
+      <div className="row-span-1 my-auto mx-auto">
+        <Link href={"/usage"} className="border-b border-blue-700  text-blue-700">使い方</Link>
+      </div>
+      <div className="row-span-2  flex flex-col justify-evenly">
+        <input ref={inputIdRef} placeholder="図書(書誌)IDを入力してください" className="border border-black py-2 rounded-lg text-center bg-white max-w-2xl mx-auto w-3/5 text-sm" />
+        <div className="flex justify-center relative">
+          <button onClick={addBookID} className=" font-bold bg-gradient-to-br from-emerald-300 to-emerald-400 w-1/4 mx-auto py-2 text-white shadow-lg  rounded-lg max-w-xs">追加</button>
+          <div className="absolute right-8 bottom-2" onClick={() => getAllBooksData(bookIds)}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-6">
+              <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0V5.36l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+            </svg>
+
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+      <div className="row-span-7  relative overflow-y-auto">
+        {books.length === 0 && isLoading && <p className="text-center">Now Loading...</p>}
+        <div className="absolute inset-0 ">
+          {books.map((element, index) => {
+            //出現の誤差
+            const delay = index * 0.2;
+            return (
+              <BookState delay={delay} deleteById={deleteById} key={index} id={element.id} state={element.state} title={element.title} isLoading={isLoading} />
+            )
+          })}
+        </div>
+      </div>
     </div>
   );
 }
