@@ -72,7 +72,7 @@ const BookState = ({ state, id, title, isLoading, deleteById, delay }: Props) =>
         >
           <p className="px-1 text-center col-span-7 font-bold text-sm">{title}</p>
           <div className="text-center col-span-3 h-full grid grid-rows-3 ">
-            <div className="row-span-2 flex flex-col justify-center">
+            <div className="row-span-2 flex flex-row justify-end mx-4 mt-2 ">
               <AnimatePresence>
                 <motion.div className=""
                   initial={{ opacity: 0, scale: 0.8 }}
