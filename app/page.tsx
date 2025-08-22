@@ -77,21 +77,25 @@ export default function Home() {
 
   //追加ボタンを押した時の処理
   const addBookID = async () => {
-    console.log(books);
+    if (isLoading) return; // すでにデータを取得中の場合は何もしない
+    setIsLoading(true);
     if (!inputIdRef.current?.value) {
       alert("図書IDを入力してください");
+      setIsLoading(false);
       return;
     }
     const newBookId = inputIdRef.current.value as string;
     //すでに追加されている場合は何もしない
     if (bookIds.includes(newBookId)) {
       alert("すでに追加されています");
+      setIsLoading(false);
       return;
     }
     //図書IDが有効かを確認
     const bookState = await getState(newBookId);
     if (bookState.length === 0) {
       alert("図書IDが無効です");
+      setIsLoading(false);
       return;
     }
     //図書名を取得
@@ -100,7 +104,8 @@ export default function Home() {
     setBooks([...books, { title: bookTitle, id: newBookId, state: bookState }]);
     //ローカルストレージに保存
     localStorage.setItem("bookIds", JSON.stringify([...bookIds, newBookId]));
-    console.log(bookState);
+    inputIdRef.current.value = ""; // 入力欄をクリア
+    setIsLoading(false);
   }
 
   useEffect(() => {
